@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Left Bunny Ear Outer -->
+    <path
+        android:fillColor="#E0D7FF"
+        android:pathData="M39,46 C34,36 34,22 41,18 C47,15 50,26 48,42 Z" />
+    <!-- Left Bunny Ear Inner -->
+    <path
+        android:fillColor="#FF4081"
+        android:pathData="M39.5,42 C36,34 36,24 41,21 C45,19 47,27 45.5,39 Z" />
+    <!-- Right Bunny Ear Outer -->
+    <path
+        android:fillColor="#E0D7FF"
+        android:pathData="M69,46 C74,36 74,22 67,18 C61,15 58,26 60,42 Z" />
+    <!-- Right Bunny Ear Inner -->
+    <path
+        android:fillColor="#FF4081"
+        android:pathData="M68.5,42 C72,34 72,24 67,21 C63,19 61,27 62.5,39 Z" />
+    <!-- Bunny Head -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,40 C40,40 32,50 32,63 C32,76 41,84 54,84 C67,84 76,76 76,63 C76,50 68,40 54,40 Z" />
+    <!-- Cyber Visor / Cool Sunglasses -->
+    <path
+        android:fillColor="#11052C"
+        android:pathData="M34,54 C34,50 74,50 74,54 L72,67 C66,70 42,70 36,67 Z" />
+    <!-- Visor Glowing Gradient Edge -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M36,56 L72,56 L70,62 L38,62 Z" />
+    <!-- Visor Neon Accent Line -->
+    <path
+        android:fillColor="#FF007F"
+        android:pathData="M40,64 L68,64 L66,66 L42,66 Z" />
+    <!-- Bunny Nose -->
+    <path
+        android:fillColor="#FF4081"
+        android:pathData="M54,71 C52.5,71 51.5,72.5 54,74 C56.5,72.5 55.5,71 54,71 Z" />
+    <!-- Happy Smile -->
+    <path
+        android:strokeColor="#11052C"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M48,76 C51,79 57,79 60,76" />
+    <!-- Cute Cheeks -->
+    <path
+        android:fillColor="#FFB2D6"
+        android:pathData="M37,70 A3,2 0 1,0 43,70 A3,2 0 1,0 37,70 Z" />
+    <path
+        android:fillColor="#FFB2D6"
+        android:pathData="M65,70 A3,2 0 1,0 71,70 A3,2 0 1,0 65,70 Z" />
+    <!-- AI Sparkle on Left Ear -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M27,33 L29,37 L33,39 L29,41 L27,45 L25,41 L21,39 L25,37 Z" />
+</vector>
