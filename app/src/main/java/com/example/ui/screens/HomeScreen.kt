@@ -80,6 +80,7 @@ fun HomeScreen(
     onReplaySpeech: () -> Unit,
     onAvatarTapped: (String) -> Unit,
     onOpenWardrobe: () -> Unit,
+    onOpenTraining: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var inputText by remember { mutableStateOf("") }
@@ -183,14 +184,16 @@ fun HomeScreen(
 
         // 3. Quick Action Suggestion Chips
         val suggestions = listOf(
+            "🤖 What is AI?",
+            "💻 Computer kya hai?",
+            "🎓 Sikhao Buny ko",
             "🎬 Open YouTube",
+            "🌐 Internet kya hai?",
             "🔥 Roast me",
             "💡 Flashlight",
             "😂 Ek joke sunao",
-            "🔋 Battery status",
-            "📸 Camera",
-            "📱 WhatsApp kholo",
-            "25 * 84 kitna hua?"
+            "🧠 Machine learning kya hai?",
+            "🔋 Battery status"
         )
 
         Row(
@@ -207,7 +210,13 @@ fun HomeScreen(
                     border = androidx.compose.foundation.BorderStroke(1.dp, NeonViolet.copy(alpha = 0.4f)),
                     modifier = Modifier
                         .clip(RoundedCornerShape(14.dp))
-                        .clickable { onSendMessage(chipText) }
+                        .clickable {
+                            if (chipText.contains("Sikhao")) {
+                                onOpenTraining()
+                            } else {
+                                onSendMessage(chipText)
+                            }
+                        }
                         .testTag("quick_chip_${chipText.filter { it.isLetterOrDigit() }}")
                 ) {
                     Text(
@@ -341,7 +350,56 @@ fun HomeScreen(
             )
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        // Brain Training Quick Banner
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = CyberSurface,
+            border = androidx.compose.foundation.BorderStroke(1.dp, CyberBorder),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .clickable { onOpenTraining() }
+                .testTag("open_training_banner")
+        ) {
+            Row(
+                modifier = Modifier.padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("🎓", fontSize = 24.sp)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = "Teach Buny (Brain Training)",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = Color.White
+                        )
+                        Text(
+                            text = "Dost ki tarah Buny ko nayi baatein sikhao",
+                            fontSize = 12.sp,
+                            color = Color.LightGray
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = NeonCyan.copy(alpha = 0.2f)
+                ) {
+                    Text(
+                        text = "Sikhao 🧠",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = NeonCyan,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
 
         // Wardrobe Quick Access Banner
         Surface(

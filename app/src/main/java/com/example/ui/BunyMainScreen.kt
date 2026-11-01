@@ -40,9 +40,13 @@ import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonPink
 import com.example.viewmodel.BunyViewModel
 
+import androidx.compose.material.icons.filled.School
+import com.example.ui.screens.TrainingScreen
+
 enum class MainTab(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
     HOME("Buny", Icons.Default.Home),
     CHAT("Chat", Icons.Default.Forum),
+    TRAIN("Sikhao", Icons.Default.School),
     WARDROBE("Closet", Icons.Default.Checkroom),
     TOOLS("Tools", Icons.Default.Build),
     SETTINGS("Settings", Icons.Default.Settings)
@@ -83,6 +87,7 @@ fun BunyMainScreen(
             )
         },
         bottomBar = {
+            val navTabs = listOf(MainTab.HOME, MainTab.CHAT, MainTab.TRAIN, MainTab.WARDROBE, MainTab.TOOLS)
             NavigationBar(
                 containerColor = CyberSurface,
                 tonalElevation = 8.dp,
@@ -90,7 +95,7 @@ fun BunyMainScreen(
                     .navigationBarsPadding()
                     .testTag("buny_bottom_nav")
             ) {
-                MainTab.values().forEach { tab ->
+                navTabs.forEach { tab ->
                     val isSelected = currentTab == tab
                     NavigationBarItem(
                         selected = isSelected,
@@ -141,7 +146,8 @@ fun BunyMainScreen(
                         onStopVoice = { viewModel.stopVoiceInput() },
                         onReplaySpeech = { viewModel.speechManager.speak(latestSpeech) },
                         onAvatarTapped = { touchType -> viewModel.onAvatarTapped(touchType) },
-                        onOpenWardrobe = { currentTab = MainTab.WARDROBE }
+                        onOpenWardrobe = { currentTab = MainTab.WARDROBE },
+                        onOpenTraining = { currentTab = MainTab.TRAIN }
                     )
                 }
                 MainTab.CHAT -> {
@@ -153,6 +159,12 @@ fun BunyMainScreen(
                         onStopVoice = { viewModel.stopVoiceInput() },
                         onReplayMessage = { viewModel.speechManager.speak(it) },
                         onClearChat = { viewModel.clearChat() }
+                    )
+                }
+                MainTab.TRAIN -> {
+                    TrainingScreen(
+                        memoryManager = viewModel.memoryManager,
+                        onSpeak = { viewModel.speechManager.speak(it) }
                     )
                 }
                 MainTab.WARDROBE -> {
@@ -173,7 +185,8 @@ fun BunyMainScreen(
                         isCustomKeyConfigured = customApiKey.isNotBlank(),
                         onSpeakFeedback = { line ->
                             viewModel.speechManager.speak(line)
-                        }
+                        },
+                        onOpenSettings = { currentTab = MainTab.SETTINGS }
                     )
                 }
                 MainTab.SETTINGS -> {

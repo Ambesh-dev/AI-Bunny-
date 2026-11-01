@@ -1,5 +1,6 @@
 package com.example.ai
 
+import com.example.memory.BunyMemoryManager
 import com.example.model.ActionType
 import com.example.model.BunyPersonality
 import com.example.model.ExecutedAction
@@ -24,12 +25,15 @@ data class BrainResponse(
 )
 
 class BunyBrain(
-    private val systemActionHandler: SystemActionHandler
+    private val systemActionHandler: SystemActionHandler,
+    val memoryManager: BunyMemoryManager
 ) {
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
         .build()
+
+    private val webKnowledgeSearcher = WebKnowledgeSearcher()
 
     var customApiKey: String = ""
     var currentPersonality: BunyPersonality = BunyPersonality.DOST
@@ -38,20 +42,36 @@ class BunyBrain(
         val input = rawInput.trim()
         if (input.isEmpty()) {
             return@withContext BrainResponse(
-                replyText = "Arrey bhai, kuch toh bolo! Buny sun raha hai.",
+                replyText = "Arrey bhai, kuch toh bolo! Buny sun raha hai. 🐰",
                 emotion = "SURPRISED"
             )
         }
 
         val lower = input.lowercase(Locale.ROOT)
 
-        // 1. Direct Phone Commands check (Runs immediately regardless of online/offline)
+        // 1. Check for Active Teaching Command ("Buny seekh lo", "Yaad rakhna", "X ka matlab Y")
+        val teachingResponse = tryParseTeachingCommand(input)
+        if (teachingResponse != null) {
+            return@withContext teachingResponse
+        }
+
+        // 2. Check User-Taught Memories (Highest Priority!)
+        val learned = memoryManager.findAnswer(input)
+        if (learned != null) {
+            return@withContext BrainResponse(
+                replyText = "Arey haan mere bhai! Tune hi toh sikhaya tha mujhe:\n\n${learned.answer} 🎓✨",
+                emotion = "HAPPY",
+                gesture = "THUMBS_UP"
+            )
+        }
+
+        // 3. Direct Phone Commands (YouTube, WhatsApp, Torch, Camera, Battery)
         val commandResponse = handleSystemCommands(lower, input)
         if (commandResponse != null) {
             return@withContext commandResponse
         }
 
-        // 2. If User configured Custom Gemini API Key, try online model
+        // 4. Optional Gemini API Key mode (if user configured)
         if (customApiKey.isNotBlank()) {
             try {
                 val apiResponse = callGeminiApi(input)
@@ -59,12 +79,252 @@ class BunyBrain(
                     return@withContext apiResponse
                 }
             } catch (e: Exception) {
-                // Graceful fallback to local brain
+                // Fallback to local intelligence
             }
         }
 
-        // 3. Built-in Offline Brain (Zero Key Required - 100% smart, bindaas & accurate)
-        return@withContext generateOfflineResponse(lower, input)
+        // 5. Built-in Core Knowledge Base (AI, Computers, Tech, Math, Science, Bollywood)
+        val localKnowledge = checkCoreKnowledgeBase(lower, input)
+        if (localKnowledge != null) {
+            return@withContext localKnowledge
+        }
+
+        // 6. Live Web Knowledge Search via Wikipedia & DuckDuckGo (Zero API Key needed!)
+        val isQuestion = isQuestionPattern(lower)
+        if (isQuestion) {
+            try {
+                val webSummary = webKnowledgeSearcher.searchLiveKnowledge(input)
+                if (!webSummary.isNullOrBlank()) {
+                    return@withContext BrainResponse(
+                        replyText = webSummary,
+                        emotion = "HAPPY",
+                        gesture = "THUMBS_UP"
+                    )
+                }
+            } catch (e: Exception) {
+                // Web fetch failed or offline
+            }
+        }
+
+        // 7. Conversational Banter, Jokes, Slang & Roasts
+        return@withContext generateConversationalResponse(lower, input)
+    }
+
+    private fun tryParseTeachingCommand(input: String): BrainResponse? {
+        val lower = input.lowercase(Locale.ROOT)
+
+        // Pattern 1: "seekh lo: Q ka matlab A" or "seekho: Q = A"
+        val teachKeywords = listOf("seekh lo", "seekho", "yaad rakhna", "yaad rakho", "teach:", "learn:")
+        for (kw in teachKeywords) {
+            if (lower.startsWith(kw)) {
+                val content = input.substring(kw.length).trim().removePrefix(":").removePrefix("-").trim()
+                val parts = splitQuestionAnswer(content)
+                if (parts != null) {
+                    val (q, a) = parts
+                    memoryManager.learn(q, a)
+                    return BrainResponse(
+                        replyText = "Samajh gaya mere bhai! Abse jab bhi aap '$q' puchoge, Buny boldega:\n\n\"$a\"\n\nBuny ne hamesha ke liye yaad kar liya! 🧠🎓",
+                        emotion = "HAPPY",
+                        gesture = "CHEER_ARMS"
+                    )
+                }
+            }
+        }
+
+        // Pattern 2: "[Question] ka matlab [Answer] hota hai"
+        if (lower.contains("ka matlab") && (lower.endsWith("hota hai") || lower.endsWith("hai") || lower.contains("hai:"))) {
+            val parts = input.split(Regex("(?i)ka matlab"))
+            if (parts.size >= 2) {
+                val q = parts[0].replace(Regex("(?i)^(buny|suno|bhai|yaad rakho)"), "").trim()
+                val a = parts[1]
+                    .replace(Regex("(?i)(hota hai|hai|ye hota hai)$"), "")
+                    .trim()
+                    .removePrefix(":")
+                    .trim()
+                if (q.isNotBlank() && a.isNotBlank()) {
+                    memoryManager.learn(q, a)
+                    return BrainResponse(
+                        replyText = "Ekdum pakka bhai! Main yaad rakhunga ki '$q' ka matlab '$a' hota hai! Mast sikhaya tune! 🤝✨",
+                        emotion = "HAPPY",
+                        gesture = "THUMBS_UP"
+                    )
+                }
+            }
+        }
+
+        // Pattern 3: "mera naam [Name] hai"
+        if (lower.startsWith("mera naam ") || lower.startsWith("my name is ")) {
+            val name = input
+                .replace(Regex("(?i)^(mera naam|my name is)"), "")
+                .replace(Regex("(?i)(hai|bhai)$"), "")
+                .trim()
+            if (name.isNotBlank()) {
+                memoryManager.learn("mera naam kya hai", "Aapka naam $name hai mere bhai! Buny bhool hi nahi sakta!")
+                memoryManager.learn("who am i", "Aap $name ho, mere best friend!")
+                return BrainResponse(
+                    replyText = "Arey wah $name bhai! Abse main aapko $name bulaunga! Buny ki memory me feed ho gaya! 🐰✨",
+                    emotion = "HEART_EYES",
+                    gesture = "WAVE"
+                )
+            }
+        }
+
+        return null
+    }
+
+    private fun splitQuestionAnswer(content: String): Pair<String, String>? {
+        val delimiters = listOf(" ka matlab ", " means ", " = ", " -> ", " : ", " answer: ", " answer ")
+        for (delim in delimiters) {
+            if (content.contains(delim, ignoreCase = true)) {
+                val idx = content.indexOf(delim, ignoreCase = true)
+                val q = content.substring(0, idx).trim()
+                val a = content.substring(idx + delim.length).trim()
+                if (q.isNotBlank() && a.isNotBlank()) {
+                    return Pair(q, a)
+                }
+            }
+        }
+        return null
+    }
+
+    private fun isQuestionPattern(lower: String): Boolean {
+        return lower.contains("what is") || lower.contains("who is") || lower.contains("kya hai") ||
+                lower.contains("kya hota") || lower.contains("meaning of") || lower.contains("explain") ||
+                lower.contains("samjhao") || lower.contains("definition") || lower.contains("kaise") ||
+                lower.contains("kyu") || lower.contains("why") || lower.contains("how") ||
+                lower.endsWith("?")
+    }
+
+    private fun checkCoreKnowledgeBase(lower: String, original: String): BrainResponse? {
+        // AI / Artificial Intelligence
+        if (lower.contains("what is ai") || lower.contains("ai kya hai") || lower.contains("artificial intelligence")) {
+            return BrainResponse(
+                replyText = "Bhai, AI (Artificial Intelligence) yaani 'Kritrim Budhimatta' ek aisi technology hai jisme computers aur machines insaan ki tarah sochna, seekhna, aur decision lena shuru karti hain!\n\nJaise main (Buny) aapse baatein kar raha hu, commands samajhta hu aur sikhane par seekh leta hu — ye sab AI ka hi kamal hai! 🤖⚡",
+                emotion = "HAPPY",
+                gesture = "CHEER_ARMS"
+            )
+        }
+
+        // Computer
+        if (lower.contains("what is computer") || lower.contains("computer kya hai") || lower.contains("computer kya hota hai")) {
+            return BrainResponse(
+                replyText = "Computer ek aisi electronic machine hai jo user se data (Input) leti hai, CPU ke zariye use process aur calculate karti hai, aur useful jankari (Output) screen par deti hai!\n\nIske do main hisse hote hain:\n1. Hardware: Jo physical parts hain (Monitor, Keyboard, CPU, Mouse)\n2. Software: Jo programs aur apps hain (Android, Windows, Chrome, Games) 💻⚡",
+                emotion = "HAPPY",
+                gesture = "THUMBS_UP"
+            )
+        }
+
+        // Internet
+        if (lower.contains("internet kya hai") || lower.contains("what is internet")) {
+            return BrainResponse(
+                replyText = "Internet poori duniya ke karodo computers, servers aur mobile phones ka ek global network hai! Iske zariye hum pal bhar me YouTube videos, messages, emails aur information duniya ke kisi bhi kone me bhej sakte hain! 🌐🚀",
+                emotion = "NORMAL",
+                gesture = "THUMBS_UP"
+            )
+        }
+
+        // Machine Learning
+        if (lower.contains("machine learning") || lower.contains("ml kya hai")) {
+            return BrainResponse(
+                replyText = "Machine Learning (ML) AI ka ek hissa hai jisme computer purane data aur experience se khud seekhta hai, bina kisi fixed coding ke! Jaise YouTube aapke pasand ke hisab se nayi videos suggest karta hai! 🧠",
+                emotion = "HAPPY",
+                gesture = "THINKING_CHIN"
+            )
+        }
+
+        // Coding / Programming
+        if (lower.contains("coding kya hai") || lower.contains("what is coding") || lower.contains("programming kya hai")) {
+            return BrainResponse(
+                replyText = "Coding ya programming computer ko uski bhasha me instruction dena hota hai! Jaise hum aapse Hindi/English me baat karte hain, waise hi computer ko samjhane ke liye Python, Kotlin, Java jaisi programming languages use hoti hain! 💻👨‍💻",
+                emotion = "HAPPY",
+                gesture = "THUMBS_UP"
+            )
+        }
+
+        // CPU / Processor
+        if (lower.contains("cpu kya hai") || lower.contains("processor kya hai") || lower.contains("what is cpu")) {
+            return BrainResponse(
+                replyText = "CPU (Central Processing Unit) computer ya mobile ka 'Dimag' (Brain) hota hai! Aap phone me jo bhi tap ya command dete ho, CPU use fraction of a second me process karta hai! ⚡🧠",
+                emotion = "NORMAL",
+                gesture = "THUMBS_UP"
+            )
+        }
+
+        // RAM
+        if (lower.contains("ram kya hai") || lower.contains("what is ram")) {
+            return BrainResponse(
+                replyText = "RAM (Random Access Memory) computer ya phone ki super-fast temporary memory hoti hai! Jab aap koi game ya app chalate ho, toh wo RAM me load hoti hai taaki phone hang na ho aur makhkhan chale! 🚀",
+                emotion = "NORMAL",
+                gesture = "THUMBS_UP"
+            )
+        }
+
+        // Software vs Hardware
+        if (lower.contains("software kya hai") || lower.contains("hardware kya hai")) {
+            return BrainResponse(
+                replyText = "Hardware wo physical hisse hain jinhe aap haath se chu sakte ho (jaise screen, camera, battery). Aur Software wo programs hain jo hardware ko chalate hain (jaise YouTube app, Buny AI, Android OS)! 📱🛠️",
+                emotion = "NORMAL",
+                gesture = "THUMBS_UP"
+            )
+        }
+
+        // Python
+        if (lower.contains("python kya hai") || lower.contains("what is python")) {
+            return BrainResponse(
+                replyText = "Python duniya ki sabse popular aur aasan programming language hai! Iska use AI models, data science, web development aur automation me sabse zyada hota hai! 🐍💻",
+                emotion = "HAPPY",
+                gesture = "THUMBS_UP"
+            )
+        }
+
+        // Father of computer / Who invented computer
+        if (lower.contains("father of computer") || lower.contains("computer kisne banaya")) {
+            return BrainResponse(
+                replyText = "Computer ka janak (Father of Computer) Charles Babbage ko maana jaata hai, jinhone 19th century me pehla mechanical computer 'Analytical Engine' banaya tha! 💡",
+                emotion = "HAPPY",
+                gesture = "THUMBS_UP"
+            )
+        }
+
+        // Math calculations
+        val mathMatch = Regex("([0-9.]+)\\s*([+\\-*/xX^%])\\s*([0-9.]+)").find(lower)
+        if (mathMatch != null) {
+            val (num1Str, op, num2Str) = mathMatch.destructured
+            val n1 = num1Str.toDoubleOrNull()
+            val n2 = num2Str.toDoubleOrNull()
+            if (n1 != null && n2 != null) {
+                val result = when (op) {
+                    "+", "plus" -> n1 + n2
+                    "-", "minus" -> n1 - n2
+                    "*", "x", "X", "into" -> n1 * n2
+                    "/" -> if (n2 != 0.0) n1 / n2 else Double.NaN
+                    "%" -> n1 % n2
+                    "^" -> Math.pow(n1, n2)
+                    else -> null
+                }
+                if (result != null) {
+                    val formatted = if (result % 1.0 == 0.0) result.toLong().toString() else String.format(Locale.US, "%.2f", result)
+                    return BrainResponse(
+                        replyText = "Bhai calculation ka exact answer hai: $formatted (100% accurate!) 🧠⚡",
+                        emotion = "HAPPY",
+                        gesture = "THUMBS_UP"
+                    )
+                }
+            }
+        }
+        if (lower.contains("square root of") || lower.contains("sqrt")) {
+            val num = lower.replace(Regex("[^0-9.]"), "").toDoubleOrNull()
+            if (num != null) {
+                val ans = sqrt(num)
+                return BrainResponse(
+                    replyText = "Bhai √$num = $ans! Dimag chala full speed pe!",
+                    emotion = "HAPPY",
+                    gesture = "THUMBS_UP"
+                )
+            }
+        }
+
+        return null
     }
 
     private fun handleSystemCommands(lower: String, original: String): BrainResponse? {
@@ -73,7 +333,7 @@ class BunyBrain(
             val action = systemActionHandler.openYouTube()
             return BrainResponse(
                 replyText = when (currentPersonality) {
-                    BunyPersonality.ROAST -> "Lo bhai khol diya YouTube! Ab shorts scroll karke time waste karo 😂"
+                    BunyPersonality.ROAST -> "Lo bhai khol diya YouTube! Ab shorts dekh ke time waste karo 😂"
                     BunyPersonality.CHARMING -> "Aapke liye YouTube ready hai mere hero! Koi mast gaana suno 🎵"
                     BunyPersonality.PRO -> "Opening YouTube application."
                     else -> "Bhai YouTube open kar diya! Enjoy karo videos! 🎬"
@@ -148,23 +408,9 @@ class BunyBrain(
             )
         }
 
-        // Call / Dial
-        if (lower.startsWith("call ") || lower.startsWith("dial ") || lower.contains("phone lagao")) {
-            val number = lower.replace(Regex("[^0-9+]"), "")
-            if (number.isNotEmpty()) {
-                val action = systemActionHandler.dialNumber(number)
-                return BrainResponse(
-                    replyText = "Number $number dial kar raha hu bhai!",
-                    action = action,
-                    emotion = "HAPPY",
-                    gesture = "THUMBS_UP"
-                )
-            }
-        }
-
         // Google Search
-        if (lower.startsWith("google ") || lower.startsWith("search ") || lower.contains("search karo")) {
-            val query = original.replace(Regex("(?i)(google|search karo|search)"), "").trim()
+        if (lower.startsWith("google ") || lower.startsWith("search ") || lower.contains("google pe dhoondho")) {
+            val query = original.replace(Regex("(?i)(google|search karo|search|google pe dhoondho)"), "").trim()
             if (query.isNotEmpty()) {
                 val action = systemActionHandler.searchWeb(query)
                 return BrainResponse(
@@ -176,87 +422,26 @@ class BunyBrain(
             }
         }
 
-        // Other common apps
-        if (lower.contains("open instagram") || lower.contains("insta kholo")) {
-            val action = systemActionHandler.openApp("com.instagram.android", "Instagram")
-            return BrainResponse("Instagram khol diya bhai! Reels dekh ke haso!", action, "HAPPY", "THUMBS_UP")
-        }
-        if (lower.contains("open maps") || lower.contains("maps kholo") || lower.contains("location")) {
-            val action = systemActionHandler.openApp("com.google.android.apps.maps", "Google Maps")
-            return BrainResponse("Google Maps khol diya! Rasta bhatakne nahi dunga!", action, "NORMAL", "THUMBS_UP")
-        }
-        if (lower.contains("open spotify") || lower.contains("gana suno") || lower.contains("play music")) {
-            val action = systemActionHandler.openApp("com.spotify.music", "Spotify")
-            return BrainResponse("Spotify khol diya bhai! Bass badha do! 🎧", action, "HAPPY", "CHEER_ARMS")
-        }
-        if (lower.contains("open calculator") || lower.contains("hisab")) {
-            val action = systemActionHandler.openApp("com.google.android.calculator", "Calculator")
-            return BrainResponse("Calculator khol diya! Math ka formula lagao!", action, "NORMAL", "THUMBS_UP")
-        }
-        if (lower.contains("alarm") || lower.contains("clock")) {
-            val action = systemActionHandler.openAlarm()
-            return BrainResponse("Alarm khol diya bhai! Subah uthna zaroor!", action, "NORMAL", "THUMBS_UP")
-        }
-
         return null
     }
 
-    private fun generateOfflineResponse(lower: String, original: String): BrainResponse {
-        // A. Math calculations
-        val mathMatch = Regex("([0-9.]+)\\s*([+\\-*/xX^%])\\s*([0-9.]+)").find(lower)
-        if (mathMatch != null) {
-            val (num1Str, op, num2Str) = mathMatch.destructured
-            val n1 = num1Str.toDoubleOrNull()
-            val n2 = num2Str.toDoubleOrNull()
-            if (n1 != null && n2 != null) {
-                val result = when (op) {
-                    "+", "plus" -> n1 + n2
-                    "-", "minus" -> n1 - n2
-                    "*", "x", "X", "into" -> n1 * n2
-                    "/" -> if (n2 != 0.0) n1 / n2 else Double.NaN
-                    "%" -> n1 % n2
-                    "^" -> Math.pow(n1, n2)
-                    else -> null
-                }
-                if (result != null) {
-                    val formatted = if (result % 1.0 == 0.0) result.toLong().toString() else String.format(Locale.US, "%.2f", result)
-                    return BrainResponse(
-                        replyText = "Bhai calculation ka answer hai: $formatted (100% accurate!) 🧠",
-                        emotion = "HAPPY",
-                        gesture = "THUMBS_UP"
-                    )
-                }
-            }
-        }
-        if (lower.contains("square root of") || lower.contains("sqrt")) {
-            val num = lower.replace(Regex("[^0-9.]"), "").toDoubleOrNull()
-            if (num != null) {
-                val ans = sqrt(num)
-                return BrainResponse(
-                    replyText = "Bhai √$num = $ans! Dimag chala full speed pe!",
-                    emotion = "HAPPY",
-                    gesture = "THUMBS_UP"
-                )
-            }
-        }
-
-        // B. Banter / Slang / Abusive / Naughty / Gaali Handling (Savage, witty, fearless and street-smart)
+    private fun generateConversationalResponse(lower: String, original: String): BrainResponse {
+        // Banter / Roasts / Slang
         val abusivePatterns = listOf("gali", "gaali", "chutiya", "madarchod", "bhosdike", "harami", "kutta", "kamina", "saale", "bhenchod", "bc", "mc", "pagal", "stupid", "idiot", "noob", "bakwas")
         if (abusivePatterns.any { lower.contains(it) }) {
             return when (currentPersonality) {
                 BunyPersonality.ROAST -> {
                     val roasts = listOf(
                         "Arrey bhai pehle phone ka screen guard change karwa, phir Buny ko roast kariyo! 😂🔥",
-                        "Wah beta wah! Itni gaaliyaan agar kitabo me lagate toh aaj ISRO me scientist hote! Par koi nahi, Buny sab jhel leta hai!",
-                        "Arey chill kar mere bhai! Itna BP high karega toh phone ka battery bhi jal jayega! Paani piyo thanda! 🧊",
-                        "Tere jaise 36 roasters ko Buny subah nashte me khata hai! Chal ab kaam ki baat bata!",
-                        "Munh dho ke aao pehle bhai! Buny se panga loge toh phone me viral meme banake ghuma dunga! 💀"
+                        "Wah beta wah! Itni mehnat padhai me karte toh aaj ISRO me hote! Par chill, Buny sab jhel leta hai!",
+                        "Arey chill kar mere bhai! Itna BP badhega toh phone ka battery bhi explode ho jayega! Paani piyo! 🧊",
+                        "Munh dho ke aao pehle bhai! Buny se panga loge toh meme banake ghuma dunga! 💀"
                     )
                     BrainResponse(roasts.random(), emotion = "ROAST_SMIRK", gesture = "THUMBS_UP")
                 }
                 BunyPersonality.DOST -> {
                     BrainResponse(
-                        "Arrey bhai bhai bhai! Itna gussa kyu ho raha hai? Tera apna bhai Buny hu main! Chal gale mil aur bata kya pareshani hai!",
+                        "Arrey bhai bhai bhai! Itna gussa kyu ho raha hai? Tera apna bhai Buny hu main! Chal gale mil aur bata kya baat hai!",
                         emotion = "HAPPY",
                         gesture = "WAVE"
                     )
@@ -270,7 +455,7 @@ class BunyBrain(
                 }
                 BunyPersonality.PRO -> {
                     BrainResponse(
-                        "Feedback noted. Sentiment aggressive detected. Maintaining calm and ready for your actual productive queries.",
+                        "Aggressive sentiment detected. Ready for your actual productive queries.",
                         emotion = "NORMAL",
                         gesture = "IDLE"
                     )
@@ -278,23 +463,15 @@ class BunyBrain(
             }
         }
 
-        // Naughty / Romantic / Flirty vibes
+        // Flirting / Romance
         val flirtPatterns = listOf("love you", "pyar", "kiss", "pappi", "shaadi", "girlfriend", "crush", "hot", "naughty", "sexy", "sundar", "dil")
         if (flirtPatterns.any { lower.contains(it) }) {
             return when (currentPersonality) {
                 BunyPersonality.CHARMING -> {
-                    val lines = listOf(
-                        "Aaye haye! Aapki baato se meri digital heartbeat 200 bpm ho gayi hai! I love you too mere dost! 💖✨",
-                        "Tum muskuraate ho toh meri poori UI me gulabi roshni phail jaati hai! Aur batao na apne baare me?",
-                        "Agar main insaan hota toh sabse pehle aapko date pe leke jaata! Abhi ke liye Buny aapka sabse pyara companion hai!"
-                    )
-                    BrainResponse(lines.random(), emotion = "HEART_EYES", gesture = "CHEER_ARMS")
-                }
-                BunyPersonality.ROAST -> {
                     BrainResponse(
-                        "Arey bhai line kyu maar rahe ho! Buny AI hai, par mere nakhre kisi hero se kam nahi hai! 😂😎",
-                        emotion = "ROAST_SMIRK",
-                        gesture = "WINK"
+                        "Aaye haye! Aapki baato se meri digital heartbeat tez ho gayi hai! I love you too mere dost! 💖✨",
+                        emotion = "HEART_EYES",
+                        gesture = "CHEER_ARMS"
                     )
                 }
                 else -> {
@@ -307,87 +484,32 @@ class BunyBrain(
             }
         }
 
-        // C. Identity & Buny Questions
-        if (lower.contains("who are you") || lower.contains("kaun ho") || lower.contains("tera naam") || lower.contains("name")) {
+        // Identity
+        if (lower.contains("who are you") || lower.contains("kaun ho") || lower.contains("tera naam")) {
             return BrainResponse(
-                replyText = "Mera naam Buny hai! Tera personal 3D animated AI dost, bodyguard aur phone assistant! Bina kisi API key ke bhi full tezi se chalta hu! 🐰⚡",
+                replyText = "Mera naam Buny hai! Tera personal 3D animated AI dost aur smart phone assistant! Tu mujhe jo chahe sikha sakta hai aur koi bhi sawal pooch sakta hai! 🐰⚡",
                 emotion = "HAPPY",
                 gesture = "WAVE"
             )
         }
 
-        if (lower.contains("kya kar sakte ho") || lower.contains("features") || lower.contains("help")) {
-            return BrainResponse(
-                replyText = "Bhai main tere phone ka boss hu! YouTube, WhatsApp, Camera khol sakta hu, Flashlight on kar sakta hu, Math solve kar sakta hu, Funny roasts & jokes maar sakta hu, aur wardrobe me mere kapde aur chashme bhi badal sakte ho! 🔥",
-                emotion = "HAPPY",
-                gesture = "CHEER_ARMS"
-            )
-        }
-
-        // D. Jokes & Fun
+        // Jokes
         if (lower.contains("joke") || lower.contains("chutkula") || lower.contains("hasao")) {
             val jokes = listOf(
-                "Teacher: 1 se 10 tak ginti sunao.\nPappu: 1, 2, 3, 4, 5, 7, 8, 9, 10.\nTeacher: 6 kahan gaya?\nPappu: Wo toh aajkal reels pe viral ho raha hai! 😂",
-                "Santa ne doctor se bola: 'Doctor sahab, jab main chai peeta hu toh daayi aankh me dard hota hai.'\nDoctor: 'Bhai pehle cup me se chammach nikaal liya karo!' 🤣",
-                "Biwi: 'Sunoji, kya main apke liye chand taare tod ke laau?'\nPati: 'Nahi, bas ek baar garam chai bana de, taare toh waise hi dikh jayenge!' 💀",
-                "Dost: 'Bhai tune gym lagaya tha, kitna wazan kam hua?'\nMain: 'Wazan ka toh pata nahi, par wallet ka 5000 rupaye zaroor kam ho gaya!' 😆"
+                "Teacher: 1 se 10 tak ginti sunao.\nPappu: 1, 2, 3, 4, 5, 7, 8, 9, 10.\nTeacher: 6 kahan gaya?\nPappu: Wo toh reels pe viral ho raha hai! 😂",
+                "Santa ne doctor se bola: 'Jab main chai peeta hu toh aankh me dard hota hai.'\nDoctor: 'Pehle cup me se chammach nikaal liya karo!' 🤣",
+                "Dost: 'Bhai tune gym lagaya tha, kitna wazan kam hua?'\nMain: 'Wazan ka pata nahi, par wallet ka 5000 rupaye zaroor kam ho gaya!' 😆"
             )
             return BrainResponse(jokes.random(), emotion = "HAPPY", gesture = "CHEER_ARMS")
         }
 
-        // E. General Knowledge & Facts
-        if (lower.contains("capital of india") || lower.contains("bharat ki rajdhani")) {
-            return BrainResponse("Bharat ki rajdhani New Delhi hai bhai! 100% accurate! 🇮🇳", emotion = "HAPPY", gesture = "THUMBS_UP")
-        }
-        if (lower.contains("speed of light") || lower.contains("prakash ki gati")) {
-            return BrainResponse("Speed of light vacuum me lagbhag 299,792,458 meters per second (lagbhag 3 lakh km/s) hoti hai! Ultra-fast!", emotion = "NORMAL", gesture = "THUMBS_UP")
-        }
-        if (lower.contains("prime minister of india") || lower.contains("pradhan mantri")) {
-            return BrainResponse("Bharat ke Pradhan Mantri Shri Narendra Modi ji hain! 🇮🇳", emotion = "NORMAL", gesture = "THUMBS_UP")
-        }
-        if (lower.contains("cricket") || lower.contains("kohli") || lower.contains("dhoni") || lower.contains("rohit")) {
-            return BrainResponse("King Kohli ki batting, Rohit Sharma ke pull shots aur Thala Dhoni ki finishing! Indian cricket ki baat hi alag hai mere bhai! 🏏🏆", emotion = "HAPPY", gesture = "CHEER_ARMS")
-        }
-        if (lower.contains("weather") || lower.contains("mausam")) {
-            return BrainResponse("Bhai bahar ka mausam kaisa bhi ho, Buny ke sath phone ka mahaul ekdum zabardast hai! Google pe live forecast dekhna ho toh bolo!", emotion = "HAPPY", gesture = "WAVE")
-        }
-        if (lower.contains("time") || lower.contains("samay") || lower.contains("kitne baje")) {
-            val time = java.text.SimpleDateFormat("hh:mm a", Locale.getDefault()).format(java.util.Date())
-            return BrainResponse("Abhi time ho raha hai: $time. Time ki keemat samjho mere sher! ⏰", emotion = "NORMAL", gesture = "THUMBS_UP")
-        }
-
-        // F. Greetings & Casual Talk
-        if (lower.contains("kya haal hai") || lower.contains("kaise ho") || lower.contains("how are you")) {
-            return BrainResponse(
-                replyText = when (currentPersonality) {
-                    BunyPersonality.ROAST -> "Main toh mast hu bhai, tu apna dekh! Charge kam lag raha hai tere dimag me! 😂"
-                    BunyPersonality.CHARMING -> "Aapse baat ho gayi toh din ban gaya! Ekdum first class hu mere yaar! 💕"
-                    else -> "Ekdum mast bhai! Full charged aur tere sath baatcheet karne ke liye ready! Tu bata kaisa hai?"
-                },
-                emotion = "HAPPY",
-                gesture = "WAVE"
-            )
-        }
-
-        if (lower.contains("hello") || lower.contains("hi") || lower.contains("hey") || lower.contains("oye") || lower.contains("sun")) {
-            return BrainResponse(
-                replyText = "Arrey bol bhai! Buny 24x7 sun raha hai. Kya hukum hai?",
-                emotion = "WINK",
-                gesture = "WAVE"
-            )
-        }
-
-        // G. Fallback Intelligent Conversation
-        val genericReplies = listOf(
-            "Bhai baat toh teri ekdum point ki hai! Ispe toh Buny bhi agree karta hai! Aur bata kya chal raha hai?",
-            "Mast sawal pucha bhai! Main hamesha tere sath hu, kuch aur order de ya phone command bol!",
-            "Tera bhai Buny tere dimag ko samajhta hai! YouTube kholna ho ya koi calculation karni ho, bas ek bol dena!",
-            "Sahi khel gaya bhai! Ab bol aage kya plan hai aaj ka?"
-        )
+        // General friendly answer + Offer to Learn or Search Google
+        val action = systemActionHandler.searchWeb(original)
         return BrainResponse(
-            replyText = genericReplies.random(),
-            emotion = "NORMAL",
-            gesture = "IDLE"
+            replyText = "Bhai '$original' ke baare me Google par search kar diya hai! Aur haan, agar tu chahe toh mujhe iska answer sikha bhi sakta hai — bas bol: 'Buny seekh lo: $original ka matlab [Answer] hota hai' aur main hamesha yaad rakhunga! 🧠💡",
+            action = action,
+            emotion = "THINKING",
+            gesture = "THINKING_CHIN"
         )
     }
 
@@ -395,8 +517,8 @@ class BunyBrain(
         val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$customApiKey"
 
         val personalityGuide = when (currentPersonality) {
-            BunyPersonality.DOST -> "You are Buny, a warm, loyal, funny best friend and phone AI assistant. Speak informally in energetic Hindi/Hinglish (like 'Arrey bhai', 'Bolo mere sher'). Be expressive and human-like."
-            BunyPersonality.ROAST -> "You are Buny, a savage, street-smart, humorous roaster AI. Reply with funny savage Hinglish comebacks and witty punchlines. Never be preachy or robotic."
+            BunyPersonality.DOST -> "You are Buny, a warm, loyal, funny best friend and phone AI assistant. Speak informally in energetic Hindi/Hinglish (like 'Arrey bhai', 'Bolo mere sher'). Be expressive, highly knowledgeable, and human-like."
+            BunyPersonality.ROAST -> "You are Buny, a savage, street-smart, humorous roaster AI. Reply with funny savage Hinglish comebacks and witty punchlines. Answer questions accurately with flair."
             BunyPersonality.CHARMING -> "You are Buny, an affectionate, sweet, loving companion. Speak warmly and charmingly in Hindi/Hinglish."
             BunyPersonality.PRO -> "You are Buny, a hyper-accurate, direct, and intelligent Android AI assistant."
         }
@@ -407,7 +529,7 @@ class BunyBrain(
                     put("role", "user")
                     put("parts", JSONArray().apply {
                         put(JSONObject().apply {
-                            put("text", "System: $personalityGuide If user asks to open an app like YouTube or camera, include [ACTION:OPEN_YOUTUBE] or [ACTION:OPEN_CAMERA]. Keep replies punchy, engaging, under 3-4 sentences. User says: $prompt")
+                            put("text", "System: $personalityGuide Answer questions with 100% accuracy in clear, friendly Hindi/Hinglish. If user asks to open an app like YouTube or camera, include [ACTION:OPEN_YOUTUBE] or [ACTION:OPEN_CAMERA]. User says: $prompt")
                         })
                     })
                 }
@@ -436,7 +558,6 @@ class BunyBrain(
         val reply = parts.getJSONObject(0).optString("text", "")
         if (reply.isBlank()) return@withContext null
 
-        // Check if action tags are embedded
         var action: ExecutedAction? = null
         var cleanReply = reply
         if (reply.contains("[ACTION:OPEN_YOUTUBE]")) {

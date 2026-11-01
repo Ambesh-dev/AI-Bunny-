@@ -24,9 +24,10 @@ class BunyViewModel(application: Application) : AndroidViewModel(application) {
 
     private val prefs = application.getSharedPreferences("buny_settings", Context.MODE_PRIVATE)
 
+    val memoryManager = com.example.memory.BunyMemoryManager(application)
     val systemActionHandler = SystemActionHandler(application)
     val speechManager = BunySpeechManager(application, viewModelScope)
-    val brain = BunyBrain(systemActionHandler)
+    val brain = BunyBrain(systemActionHandler, memoryManager)
 
     // UI States
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())

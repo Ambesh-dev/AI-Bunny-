@@ -55,6 +55,7 @@ fun ToolsScreen(
     systemHandler: SystemActionHandler,
     isCustomKeyConfigured: Boolean,
     onSpeakFeedback: (String) -> Unit,
+    onOpenSettings: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val tools = listOf(

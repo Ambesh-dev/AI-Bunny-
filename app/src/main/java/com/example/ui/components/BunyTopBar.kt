@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VolumeMute
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Icon
@@ -141,6 +142,19 @@ fun BunyTopBar(
                         imageVector = if (!isVoiceMuted) Icons.Default.VolumeUp else Icons.Default.VolumeMute,
                         contentDescription = "Voice toggle",
                         tint = if (!isVoiceMuted) NeonPink else Color.Gray,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+
+                // Settings Button
+                IconButton(
+                    onClick = onPersonalityClick,
+                    modifier = Modifier.testTag("top_bar_settings_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "Settings",
+                        tint = NeonCyan,
                         modifier = Modifier.size(22.dp)
                     )
                 }
